@@ -58,6 +58,75 @@ module EmailListChecker
       response['data'] || response
     end
 
+    # Upload file for batch verification (CSV, TXT, or XLSX)
+    #
+    # @param file_path [String] Path to file (CSV, TXT, or XLSX)
+    # @param name [String, nil] Name for this batch
+    # @param callback_url [String, nil] Webhook URL for completion notification
+    # @param auto_start [Boolean] Start verification immediately (default: true)
+    # @return [Hash] Batch submission result
+    def verify_batch_file(file_path, name: nil, callback_url: nil, auto_start: true)
+      raise Error, "File not found: #{file_path}" unless File.exist?(file_path)
+
+      uri = URI.join(@base_url, '/verify/batch/upload')
+
+      boundary = "----RubyMultipartPost#{rand(1000000)}"
+
+      http = Net::HTTP.new(uri.host, uri.port)
+      http.use_ssl = uri.scheme == 'https'
+      http.read_timeout = @timeout
+      http.open_timeout = @timeout
+
+      request = Net::HTTP::Post.new(uri)
+      request['Authorization'] = "Bearer #{@api_key}"
+      request['Content-Type'] = "multipart/form-data; boundary=#{boundary}"
+      request['User-Agent'] = 'EmailListChecker-Ruby/1.0.0'
+
+      # Build multipart form data
+      post_body = []
+
+      # Add file
+      post_body << "--#{boundary}\r\n"
+      post_body << "Content-Disposition: form-data; name=\"file\"; filename=\"#{File.basename(file_path)}\"\r\n"
+      post_body << "Content-Type: application/octet-stream\r\n\r\n"
+      post_body << File.read(file_path)
+      post_body << "\r\n"
+
+      # Add auto_start
+      post_body << "--#{boundary}\r\n"
+      post_body << "Content-Disposition: form-data; name=\"auto_start\"\r\n\r\n"
+      post_body << auto_start.to_s
+      post_body << "\r\n"
+
+      # Add name if provided
+      if name
+        post_body << "--#{boundary}\r\n"
+        post_body << "Content-Disposition: form-data; name=\"name\"\r\n\r\n"
+        post_body << name
+        post_body << "\r\n"
+      end
+
+      # Add callback_url if provided
+      if callback_url
+        post_body << "--#{boundary}\r\n"
+        post_body << "Content-Disposition: form-data; name=\"callback_url\"\r\n\r\n"
+        post_body << callback_url
+        post_body << "\r\n"
+      end
+
+      post_body << "--#{boundary}--\r\n"
+
+      request.body = post_body.join
+
+      response = http.request(request)
+      data = handle_response(response)
+      data['data'] || data
+    rescue Net::OpenTimeout, Net::ReadTimeout
+      raise Error, "Request timeout after #{@timeout} seconds"
+    rescue StandardError => e
+      raise Error, "Request failed: #{e.message}"
+    end
+
     # Get batch verification status
     #
     # @param batch_id [Integer] Batch ID

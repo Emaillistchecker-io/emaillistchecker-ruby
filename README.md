@@ -128,6 +128,52 @@ results['data'].each do |email_data|
 end
 ```
 
+### Batch Verification with File Upload
+
+You can also upload CSV, TXT, or XLSX files for batch verification:
+
+```ruby
+require 'emaillistchecker'
+
+client = EmailListChecker.new('your_api_key')
+
+# Upload file for batch verification
+batch = client.verify_batch_file(
+  'path/to/emails.csv',
+  name: 'My Email List',
+  callback_url: nil,  # optional
+  auto_start: true
+)
+
+batch_id = batch['id']
+puts "Batch ID: #{batch_id}"
+puts "Total emails: #{batch['total_emails']}"
+puts "Filename: #{batch['filename']}"
+
+# Check progress (same as JSON batch)
+loop do
+  status = client.get_batch_status(batch_id)
+  puts "Progress: #{status['progress']}%"
+
+  break if status['status'] == 'completed'
+
+  sleep 5
+end
+
+# Download results
+results = client.get_batch_results(batch_id, format: 'csv', filter: 'valid')
+```
+
+**Supported file formats:**
+- CSV (.csv) - Comma-separated values
+- TXT (.txt) - Plain text, one email per line
+- Excel (.xlsx, .xls) - Excel spreadsheet
+
+**File requirements:**
+- Max file size: 10MB
+- Max emails: 10,000 per file
+- Files are automatically parsed to extract emails
+
 ### Email Finder
 
 ```ruby
